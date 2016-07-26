@@ -1,0 +1,102 @@
+cls
+Import-module "ActiveDirectory"
+Set-Location AD:
+
+$OUToDelete = 'OU=VitalAire,OU=_Users,dc=sm,dc=local'
+
+$OUArray = get-childitem $OUToDelete -recurse | Where {$_.ObjectClass -eq "organizationalUnit"} | Get-ADOrganizationalUnit -Properties "CanonicalName","ProtectedFromAccidentalDeletion"
+$NoOUObjects = get-childitem $OUToDelete -recurse | Where {$_.ObjectClass -ne "organizationalUnit"} 
+
+$OUArray = $OUArray | Sort -Property "CanonicalName" -Descending
+
+if($NoOUObjects)
+{
+    write-host "Warning:" $NoOUObjects.Count "OU contains non OU objects." -BackgroundColor DarkYellow
+
+    do
+    {
+        write-host "Show grid view?[y/n]:" -NoNewline
+        $SelectedItem = read-host
+
+        if (($SelectedItem -eq "y") -or ($SelectedItem -eq "n"))
+        { 
+            if($SelectedItem -eq "y")
+            {
+                $NoOUobjects | Out-GridView 
+            }
+            $errorID1 = $false
+        }
+        else
+        {
+            write-host "Please enter a valid value." -ForegroundColor Red
+            sleep 3
+            $errorID1 = $True
+        }
+    }
+    while($errorID1 -eq $True)
+    
+}
+
+write-host ""
+
+#$OUArray = Get-ADOrganizationalUnit -Filter {name -like "*"} -Properties "*"
+
+do
+{
+    write-host "Do you really want to delete OU" $OUToDelete "?[y/n]:" -BackgroundColor Red -NoNewline
+    
+    $SelectedItem = read-host
+
+    if (($SelectedItem -eq "y") -or ($SelectedItem -eq "n"))
+    { 
+        if($SelectedItem -eq "y")
+        {
+            foreach ($OUitem in $OUArray)
+            {
+                Write-Host $OUitem.CanonicalName -BackgroundColor DarkGray
+
+                if($OUitem.ProtectedFromAccidentalDeletion)
+                {  
+                    write-host "Remove object portection flag..." -NoNewline
+
+                    Try
+                    {
+                        Set-ADOrganizationalUnit $OUitem -ProtectedFromAccidentalDeletion:$false
+                        write-host "OK" -BackgroundColor Green
+                    }
+                    catch
+                    {
+                        $error_result = $_.Exception.Message
+                        write-host "Failed" -BackgroundColor Red -NoNewline
+                        write-host " ("$error_result")"
+                    }
+                }
+    
+                Write-Host "Delete object..." -NoNewline #"unlocked" -BackgroundColor Green
+
+                Try
+                {
+                    Remove-ADOrganizationalUnit -Identity $OUitem -Confirm:$false -ErrorAction Stop
+                    write-host "OK" -BackgroundColor Green
+                }
+                catch
+                {
+                    $error_result = $_.Exception.Message
+                    write-host "Failed" -BackgroundColor Red -NoNewline
+                    write-host " ("$error_result")"
+                }
+            } 
+        }
+        $errorID1 = $false
+    }
+    else
+    {
+        write-host "Please enter a valid value." -ForegroundColor Red
+        sleep 3
+        $errorID1 = $True
+    }
+
+}
+while($errorID1 -eq $True)
+
+
